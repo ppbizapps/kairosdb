@@ -12,6 +12,8 @@ ADD build/kairosdb-${VERSION}.tar /opt/
 
 RUN chown -R kairosdb /opt/kairosdb
 
+ADD ["https://hq-stash.corp.proofpoint.com/projects/PULSE/repos/pulse-kairosdb-plugins/raw/prometheus-adapter/prometheus-adapter-1.0.jar?at=refs%2Fheads%2Fmaster", "/opt/kairosdb/lib/prometheus-adapter/"]
+
 WORKDIR /opt/kairosdb
 
 ## KairosDB Configuration Environment Variables
