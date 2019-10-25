@@ -2,7 +2,7 @@
 ## USE 'java -cp tools/tablesaw-1.2.6.jar  make docker-image'
 ## TO BUILD.
 
-FROM azul/zulu-openjdk-debian:8u202
+FROM azul/zulu-openjdk-debian:8u222
 
 ARG VERSION
 
