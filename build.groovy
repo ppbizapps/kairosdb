@@ -239,17 +239,20 @@ libFileSets = [
 
 scriptsFileSet = new RegExFileSet("src/scripts", ".*").addExcludeFile("kairosdb-env.sh")
 webrootFileSet = new RegExFileSet("webroot", ".*").recurse()
+authFileSet = new RegExFileSet("auth", ".*")
 
 zipLibDir = "$programName/lib"
 zipBinDir = "$programName/bin"
 zipConfDir = "$programName/conf"
 zipConfLoggingDir = "$zipConfDir/logging"
 zipWebRootDir = "$programName/webroot"
+zipAuthDir = "$programName/auth"
 tarRule = new TarRule("build/${programName}-${version}-${release}.tar")
 		.addDepend(jp.getJarRule())
 		.addDepend(resolveIvyFileSetRule)
 		.addFileSetTo(zipBinDir, scriptsFileSet)
 		.addFileSetTo(zipWebRootDir, webrootFileSet)
+		.addFileSetTo(zipAuthDir, authFileSet)
 		.addFileTo(zipConfDir, "src/main/resources", "kairosdb.conf")
 		.addFileTo(zipConfLoggingDir, "src/main/resources", "logback.xml")
 		.setFilePermission(".*\\.sh", 0755)
@@ -314,7 +317,8 @@ def doRPM(Rule rule)
 
 	addFileSetToRPM(rpmBuilder, "$rpmBaseInstallDir/bin", scriptsFileSet)
 
-	rpmBuilder.addFile("/etc/init.d/kairosdb", new File("src/scripts/kairosdb-service.sh"), 0755)
+	//rpmBuilder.addFile("/etc/init.d/kairosdb", new File("src/scripts/kairosdb-service.sh"), 0755)
+	rpmBuilder.addFile("/lib/systemd/system/kairosdb.service", new File("src/scripts/kairosdb.service"), 0644)
 	rpmBuilder.addFile("$rpmBaseInstallDir/conf/kairosdb.conf",
 			new File("src/main/resources/kairosdb.conf"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE))
 	rpmBuilder.addFile("$rpmBaseInstallDir/conf/logging/logback.xml",

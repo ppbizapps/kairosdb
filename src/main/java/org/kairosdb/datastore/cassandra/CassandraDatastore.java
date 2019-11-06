@@ -20,14 +20,14 @@ import com.datastax.driver.core.Host;
 import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.ResultSetFuture;
 import com.datastax.driver.core.Row;
+import com.datastax.driver.core.Statement;
+import com.datastax.driver.core.utils.UUIDs;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterators;
-import com.datastax.driver.core.utils.UUIDs;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.inject.Inject;
-import com.typesafe.config.Optional;
 import org.kairosdb.core.DataPoint;
 import org.kairosdb.core.DataPointSet;
 import org.kairosdb.core.KairosDataPointFactory;
@@ -847,13 +847,12 @@ public class CassandraDatastore implements Datastore, ProcessorHandler, KairosMe
 							statement.setConsistencyLevel(cluster.getReadConsistencyLevel());
 							cluster.execute(statement);
 
-							statement = new BoundStatement(cluster.psRowKeyDelete);
-							statement.setString(0, rowKey.getMetricName());
-							statement.setTimestamp(1, new Date(rowKey.getTimestamp()));
-							statement.setString(2, rowKey.getDataType());
-							statement.setMap(3, rowKey.getTags());
-							statement.setConsistencyLevel(cluster.getReadConsistencyLevel());
-							cluster.execute(statement);
+							RowKeyLookup rowKeyLookup = cluster.getRowKeyLookupForMetric(rowKey.getMetricName());
+							for (Statement rowKeyDeleteStmt : rowKeyLookup.createDeleteStatements(rowKey))
+							{
+								rowKeyDeleteStmt.setConsistencyLevel(cluster.getReadConsistencyLevel());
+								cluster.execute(rowKeyDeleteStmt);
+							}
 
 							//Should only remove if the entire time window goes away and no tags are specified in query
 							//todo if we allow deletes for specific types this needs to change
@@ -966,6 +965,8 @@ public class CassandraDatastore implements Datastore, ProcessorHandler, KairosMe
 		//Default to query index if no plugin was provided
 		if (ret == null)
 		{
+			List<Iterator<DataPointsRowKey>> retList = new ArrayList<>();
+
 			//todo use Iterable.concat to query multiple metrics at the same time.
 			//each filtered iterator will be combined into one and returned.
 			//one issue is that the queries are done in the constructor
@@ -973,18 +974,20 @@ public class CassandraDatastore implements Datastore, ProcessorHandler, KairosMe
 			//hasNext call, ick
 			if (m_writeCluster.containRange(query.getStartTime(), query.getEndTime()))
 			{
-				ret = m_rowKeyFilterFactory.create(m_writeCluster, query.getName(), query.getStartTime(),
-						query.getEndTime(), query.getTags());
+				retList.add(m_rowKeyFilterFactory.create(m_writeCluster, query.getName(), query.getStartTime(),
+						query.getEndTime(), query.getTags()));
 			}
 
 			for (ClusterConnection cluster : m_readClusters)
 			{
 				if (cluster.containRange(query.getStartTime(), query.getEndTime()))
 				{
-					ret = Iterators.concat(ret, m_rowKeyFilterFactory.create(cluster, query.getName(), query.getStartTime(),
+					retList.add(m_rowKeyFilterFactory.create(cluster, query.getName(), query.getStartTime(),
 							query.getEndTime(), query.getTags()));
 				}
 			}
+
+			ret = Iterators.concat(retList.iterator());
 		}
 
 		return (ret);
