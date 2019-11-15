@@ -34,6 +34,7 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.ExecutorThreadPool;
+import org.kairosdb.auth.SoftDefaultAuthenticatorFactory;
 import org.kairosdb.core.KairosDBService;
 import org.kairosdb.core.exception.KairosDBException;
 import org.slf4j.Logger;
@@ -320,6 +321,7 @@ public class WebServer implements KairosDBService
 		cm.setPathSpec("/*");
 
 		ConstraintSecurityHandler csh = new ConstraintSecurityHandler();
+		csh.setAuthenticatorFactory(new SoftDefaultAuthenticatorFactory());
         JAASLoginService l = new JAASLoginService();
         l.setLoginModuleName(m_authModuleName);
         csh.addConstraintMapping(healthcheckConstraintMapping);
