@@ -76,6 +76,7 @@ public class WebServer implements KairosDBService
 	public static final String JETTY_REQUEST_LOGGING_ENABLED = "kairosdb.jetty.request_logging.enabled";
 	public static final String JETTY_REQUEST_LOGGING_RETAIN_DAYS = "kairosdb.jetty.request_logging.retain_days";
 	public static final String JETTY_REQUEST_LOGGING_IGNORE_PATHS = "kairosdb.jetty.request_logging.ignore_paths";
+	public static final String JETTY_USE_SOFT_AUTHENTICATOR_FACTORY = "kairosdb.jetty.use_soft_authenticator_factory";
 
 
 	private InetAddress m_address;
@@ -94,6 +95,7 @@ public class WebServer implements KairosDBService
 	private int m_requestLoggingRetainDays = LOG_RETAIN_DAYS;
 	private boolean m_requestLoggingEnabled;
 	private String[] m_loggingIgnorePaths;
+	private boolean m_useSoftAuthenticatorFactory;
 
 
 	public WebServer(int port, String webRoot)
@@ -186,6 +188,12 @@ public class WebServer implements KairosDBService
 		splitter = splitter.trimResults(cm);
 		List<String> ignorePathsList = splitter.splitToList(ignorePaths);
 		m_loggingIgnorePaths = ignorePathsList.toArray(new String[ignorePathsList.size()]);
+	}
+
+	@Inject(optional = true)
+	public void setJettyUseSoftAuthenticatorFactory(@Named(JETTY_USE_SOFT_AUTHENTICATOR_FACTORY) String useSoftAuthenticatorFactory)
+	{
+		m_useSoftAuthenticatorFactory = Boolean.parseBoolean(useSoftAuthenticatorFactory);
 	}
 
 	@Override
@@ -321,14 +329,15 @@ public class WebServer implements KairosDBService
 		cm.setPathSpec("/*");
 
 		ConstraintSecurityHandler csh = new ConstraintSecurityHandler();
-		csh.setAuthenticatorFactory(new SoftDefaultAuthenticatorFactory());
-        JAASLoginService l = new JAASLoginService();
-        l.setLoginModuleName(m_authModuleName);
-        csh.addConstraintMapping(healthcheckConstraintMapping);
-        csh.addConstraintMapping(cm);
-        csh.setLoginService(l);
-        l.start();
-        return csh;
+		if (m_useSoftAuthenticatorFactory)
+			csh.setAuthenticatorFactory(new SoftDefaultAuthenticatorFactory());
+		JAASLoginService l = new JAASLoginService();
+		l.setLoginModuleName(m_authModuleName);
+		csh.addConstraintMapping(healthcheckConstraintMapping);
+		csh.addConstraintMapping(cm);
+		csh.setLoginService(l);
+		l.start();
+		return csh;
     }
 
     private void initializeJettyRequestLogging()
