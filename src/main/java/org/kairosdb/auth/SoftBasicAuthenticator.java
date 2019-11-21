@@ -5,6 +5,7 @@ import org.eclipse.jetty.security.ServerAuthException;
 import org.eclipse.jetty.security.UserAuthentication;
 import org.eclipse.jetty.security.authentication.DeferredAuthentication;
 import org.eclipse.jetty.server.Authentication;
+import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.UserIdentity;
 import org.eclipse.jetty.util.B64Code;
 
@@ -27,15 +28,17 @@ public class SoftBasicAuthenticator extends org.eclipse.jetty.security.authentic
         HttpServletRequest request = (HttpServletRequest)req;
         HttpServletResponse response = (HttpServletResponse)res;
         String credentials = request.getHeader(HttpHeader.AUTHORIZATION.asString());
-
         try
         {
             if (!mandatory)
                 return new DeferredAuthentication(this);
 
+            String username = new String("");
+            String password = new String("");
             if (credentials == null)
             {
-                credentials = "Basic RGVmYXVsdGllc3RVc2VyOkRlZmF1bHRpZXN0UGFzc3dvcmQK";
+                UserIdentity user = login (username, password, request);
+                return new UserAuthentication(getAuthMethod(),user);
             }
             int space=credentials.indexOf(' ');
             if (space>0)
@@ -48,8 +51,8 @@ public class SoftBasicAuthenticator extends org.eclipse.jetty.security.authentic
                     int i = credentials.indexOf(':');
                     if (i>0)
                     {
-                        String username = credentials.substring(0,i);
-                        String password = credentials.substring(i+1);
+                        username = credentials.substring(0,i);
+                        password = credentials.substring(i+1);
 
                         UserIdentity user = login (username, password, request);
                         if (user!=null)
@@ -59,7 +62,6 @@ public class SoftBasicAuthenticator extends org.eclipse.jetty.security.authentic
                     }
                 }
             }
-
 
             if (DeferredAuthentication.isDeferred(response))
                 return Authentication.UNAUTHENTICATED;
