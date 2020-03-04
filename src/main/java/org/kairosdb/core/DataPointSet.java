@@ -41,14 +41,10 @@ public class DataPointSet
 		this.m_dataPoints = new ArrayList<>(dataPoints);
 	}
 
+
 	public void addTag(String name, String value)
 	{
 		m_tags.put(name, value);
-	}
-
-	public void addTags(Map<String, String> tags)
-	{
-		m_tags.putAll(tags);
 	}
 
 	@Override

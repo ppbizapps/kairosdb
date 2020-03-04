@@ -16,7 +16,6 @@
 package org.kairosdb.core.reporting;
 
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Maps;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
 import org.kairosdb.core.DataPoint;
@@ -37,8 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.management.ManagementFactory;
 import java.util.List;
-import java.util.Arrays;
-import java.util.Map;
 
 import static org.kairosdb.util.Preconditions.checkNotNullOrEmpty;
 import static org.quartz.TriggerBuilder.newTrigger;
@@ -59,24 +56,6 @@ public class MetricReporterService implements KairosDBJob
 
 	@Inject
 	private LongDataPointFactory m_dataPointFactory = new LongDataPointFactoryImpl();
-
-	// Map of custom tag -> tag value pairs to add to KairosDB internal metrics
-	private Map<String, String> m_customTagsMap = Maps.newHashMap();
-
-	@Inject(optional = true)
-	private void setCustomTags(@Named("kairosdb.metrics.custom_tags") String customTags)
-	{
-		if (customTags.equals("") || customTags.equals(null)) return;
-		List<String> customTagsList = Arrays.asList(customTags.split(","));
-
-		for (String ctString : customTagsList)
-		{
-			String[] tagValuePair = ctString.split(":", 2);
-			m_customTagsMap.put(tagValuePair[0].trim(), tagValuePair[1].trim());
-		}
-
-		logger.info("KairosDB metrics custom tags defined as: " + m_customTagsMap.toString());
-	}
 
 	@Inject
 	public MetricReporterService(FilterEventBus eventBus,
@@ -124,8 +103,6 @@ public class MetricReporterService implements KairosDBJob
 				List<DataPointSet> dpList = reporter.getMetrics(timestamp);
 				for (DataPointSet dataPointSet : dpList)
 				{
-					dataPointSet.addTags(m_customTagsMap);
-
 					for (DataPoint dataPoint : dataPointSet.getDataPoints())
 					{
 						m_publisher.post(new DataPointEvent(dataPointSet.getName(),
@@ -134,11 +111,10 @@ public class MetricReporterService implements KairosDBJob
 				}
 			}
 
+
 			Runtime runtime = Runtime.getRuntime();
 			ImmutableSortedMap<String, String> tags = Tags.create()
-					.put("host", m_hostname)
-					.putAll(m_customTagsMap).build();
-
+					.put("host", m_hostname).build();
 			m_publisher.post(new DataPointEvent("kairosdb.jvm.free_memory",
 					tags, m_dataPointFactory.createDataPoint(timestamp, runtime.freeMemory()), m_ttl));
 			m_publisher.post(new DataPointEvent("kairosdb.jvm.total_memory",
