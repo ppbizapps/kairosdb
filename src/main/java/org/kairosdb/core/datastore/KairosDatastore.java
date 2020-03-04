@@ -252,6 +252,11 @@ public class KairosDatastore implements KairosPostConstructInit
 
 	}
 
+	public void indexTags(QueryMetric queryMetric) throws DatastoreException
+	{
+		m_datastore.indexMetricTags(queryMetric);
+	}
+
 	public DatastoreQuery createQuery(QueryMetric metric) throws DatastoreException
 	{
 		checkNotNull(metric);
@@ -262,15 +267,7 @@ public class KairosDatastore implements KairosPostConstructInit
 		{
 			dq = new DatastoreQueryImpl(metric);
 		}
-		catch (UnsupportedEncodingException e)
-		{
-			throw new DatastoreException(e);
-		}
-		catch (NoSuchAlgorithmException e)
-		{
-			throw new DatastoreException(e);
-		}
-		catch (InterruptedException e)
+		catch (UnsupportedEncodingException | NoSuchAlgorithmException | InterruptedException e)
 		{
 			throw new DatastoreException(e);
 		}
@@ -453,7 +450,7 @@ public class KairosDatastore implements KairosPostConstructInit
 
 			m_metric = metric;
 			m_cacheFilename = calculateFilenameHash(metric);
-			m_queuingManager.waitForTimeToRun(m_cacheFilename);
+			m_queuingManager.waitForTimeToRun(m_cacheFilename, metric);
 		}
 
 		public int getSampleSize()
@@ -498,11 +495,16 @@ public class KairosDatastore implements KairosPostConstructInit
 					m_datastore.queryDatabase(m_metric, searchResult);
 					returnedRows = searchResult.getRows();
 				}
+
 			}
 			catch (Exception e)
 			{
 				logger.error("Query Error", e);
 				throw new DatastoreException(e);
+			}
+			finally
+			{
+				searchResult.close();
 			}
 
 			//Get data point count

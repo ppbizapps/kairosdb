@@ -59,8 +59,6 @@ public class WebServer implements KairosDBService
 	public static final String JETTY_ADDRESS_PROPERTY = "kairosdb.jetty.address";
 	public static final String JETTY_PORT_PROPERTY = "kairosdb.jetty.port";
 	public static final String JETTY_WEB_ROOT_PROPERTY = "kairosdb.jetty.static_web_root";
-	public static final String JETTY_AUTH_USER_PROPERTY = "kairosdb.jetty.basic_auth.user";
-	public static final String JETTY_AUTH_PASSWORD_PROPERTY = "kairosdb.jetty.basic_auth.password";
 	public static final String JETTY_SSL_PORT = "kairosdb.jetty.ssl.port";
 	public static final String JETTY_SSL_PROTOCOLS = "kairosdb.jetty.ssl.protocols";
 	public static final String JETTY_SSL_CIPHER_SUITES = "kairosdb.jetty.ssl.cipherSuites";
@@ -77,7 +75,6 @@ public class WebServer implements KairosDBService
 	public static final String JETTY_REQUEST_LOGGING_RETAIN_DAYS = "kairosdb.jetty.request_logging.retain_days";
 	public static final String JETTY_REQUEST_LOGGING_IGNORE_PATHS = "kairosdb.jetty.request_logging.ignore_paths";
 	public static final String JETTY_USE_SOFT_AUTHENTICATOR_FACTORY = "kairosdb.jetty.use_soft_authenticator_factory";
-
 
 	private InetAddress m_address;
 	private int m_port;
@@ -221,6 +218,7 @@ public class WebServer implements KairosDBService
 
 			if (m_keyStorePath != null && !m_keyStorePath.isEmpty())
 				initializeSSL();
+			
 			ServletContextHandler servletContextHandler = new ServletContextHandler();
 			//As of Jetty 9.4 the default alias checker allows symbolic links
 

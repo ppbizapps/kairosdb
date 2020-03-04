@@ -82,6 +82,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.kairosdb.datastore.cassandra.ClusterConnection.DATA_POINTS_TABLE_NAME;
 
 public class CassandraDatastore implements Datastore, ProcessorHandler, KairosMetricReporter,
 		ServiceKeyStore
@@ -95,6 +96,7 @@ public class CassandraDatastore implements Datastore, ProcessorHandler, KairosMe
 
 
 	public static final long ROW_WIDTH = 1814400000L; //3 Weeks wide
+	public static final long MAX_CQL_BATCH_SIZE = 10000;
 
 	public static final String KEY_QUERY_TIME = "kairosdb.datastore.cassandra.key_query_time";
 	public static final String ROW_KEY_COUNT = "kairosdb.datastore.cassandra.row_key_count";
@@ -110,6 +112,7 @@ public class CassandraDatastore implements Datastore, ProcessorHandler, KairosMe
 	private final ClusterConnection m_writeCluster;
 	private final ClusterConnection m_metaCluster;
 	private final List<ClusterConnection> m_readClusters;
+	private final CassandraModule.CQLBatchFactory m_cqlBatchFactory;
 	private final Map<String, ClusterConnection> m_clusterMap;
 
 	@Inject
@@ -151,7 +154,9 @@ public class CassandraDatastore implements Datastore, ProcessorHandler, KairosMe
 			IngestExecutorService congestionExecutor,
 			CassandraModule.BatchHandlerFactory batchHandlerFactory,
 			CassandraModule.DeleteBatchHandlerFactory deleteBatchHandlerFactory,
-			CassandraModule.CQLFilteredRowKeyIteratorFactory rowKeyFilterFactory) throws DatastoreException
+			CassandraModule.CQLFilteredRowKeyIteratorFactory rowKeyFilterFactory,
+			CassandraModule.CQLBatchFactory cqlBatchFactory
+			) throws DatastoreException
 	{
 		//m_astyanaxClient = astyanaxClient;
 		m_kairosDataPointFactory = kairosDataPointFactory;
@@ -165,6 +170,8 @@ public class CassandraDatastore implements Datastore, ProcessorHandler, KairosMe
 		m_writeCluster = writeCluster;
 		m_metaCluster = metaCluster;
 		m_readClusters = readClusters;
+
+		m_cqlBatchFactory = cqlBatchFactory;
 
 		ImmutableMap.Builder<String, ClusterConnection> builder = ImmutableMap.builder();
 		builder.put(m_writeCluster.getClusterName(), m_writeCluster);
@@ -397,6 +404,40 @@ public class CassandraDatastore implements Datastore, ProcessorHandler, KairosMe
 		}
 
 		return (tagSet);
+	}
+
+	@Override
+	public void indexMetricTags(DatastoreMetricQuery query) throws DatastoreException
+	{
+		CQLBatch batch = m_cqlBatchFactory.create();
+		Iterator<DataPointsRowKey> rowKeys = getKeysForQueryIterator(query);
+
+		MemoryMonitor mm = new MemoryMonitor(20);
+		long indexStatementCount = 0;
+		while (rowKeys.hasNext())
+		{
+			DataPointsRowKey dataPointsRowKey = rowKeys.next();
+			batch.indexRowKey(dataPointsRowKey, dataPointsRowKey.getTtl());
+			mm.checkMemoryAndThrowException();
+			indexStatementCount++;
+			if (indexStatementCount % MAX_CQL_BATCH_SIZE == 0) {
+				batch.submitBatch();
+				batch = m_cqlBatchFactory.create();
+			}
+		}
+		batch.submitBatch();
+	}
+
+	@Override
+	public long getMinTimeValue()
+	{
+		return Long.MIN_VALUE;
+	}
+
+	@Override
+	public long getMaxTimeValue()
+	{
+		return Long.MAX_VALUE;
 	}
 
 	@Override
@@ -660,7 +701,7 @@ public class CassandraDatastore implements Datastore, ProcessorHandler, KairosMe
 		long queryStartTime = query.getStartTime();
 		long queryEndTime = query.getEndTime();
 		boolean useLimit = query.getLimit() != 0;
-		QueryMonitor queryMonitor = new QueryMonitor(m_cassandraConfiguration.getQueryLimit(), m_query_failure_tolerance);
+		QueryMonitor queryMonitor = new QueryMonitor(m_cassandraConfiguration.getQueryLimit(), m_cassandraConfiguration.getQueryTimeLimit(), m_query_failure_tolerance);
 
 		ExecutorService resultsExecutor = Executors.newFixedThreadPool(m_cassandraConfiguration.getQueryReaderThreads(),
 				new ThreadFactory()
@@ -734,7 +775,7 @@ public class CassandraDatastore implements Datastore, ProcessorHandler, KairosMe
 			}
 			catch (InterruptedException e)
 			{
-				e.printStackTrace();
+				queryMonitor.failQuery(e);
 			}
 
 			if (queryMonitor.keepRunning())
@@ -835,16 +876,16 @@ public class CassandraDatastore implements Datastore, ProcessorHandler, KairosMe
 				queryClusters((cluster) ->
 						{
 							//System.out.println("Delete entire row");
-							BoundStatement statement = new BoundStatement(cluster.psDataPointsDeleteRow);
-							statement.setBytesUnsafe(0, DATA_POINTS_ROW_KEY_SERIALIZER.toByteBuffer(rowKey));
-							statement.setConsistencyLevel(cluster.getReadConsistencyLevel());
+							Statement statement = new BoundStatement(cluster.psDataPointsDeleteRow)
+									.setBytesUnsafe(0, DATA_POINTS_ROW_KEY_SERIALIZER.toByteBuffer(rowKey))
+									.setConsistencyLevel(cluster.getReadConsistencyLevel());
 							cluster.execute(statement);
 
 							//Delete from old row keys
-							statement = new BoundStatement(cluster.psRowKeyIndexDelete);
-							statement.setBytesUnsafe(0, serializeString(rowKey.getMetricName()));
-							statement.setBytesUnsafe(1, DATA_POINTS_ROW_KEY_SERIALIZER.toByteBuffer(rowKey));
-							statement.setConsistencyLevel(cluster.getReadConsistencyLevel());
+							statement = new BoundStatement(cluster.psRowKeyIndexDelete)
+									.setBytesUnsafe(0, serializeString(rowKey.getMetricName()))
+									.setBytesUnsafe(1, DATA_POINTS_ROW_KEY_SERIALIZER.toByteBuffer(rowKey))
+									.setConsistencyLevel(cluster.getReadConsistencyLevel());
 							cluster.execute(statement);
 
 							RowKeyLookup rowKeyLookup = cluster.getRowKeyLookupForMetric(rowKey.getMetricName());
@@ -858,10 +899,11 @@ public class CassandraDatastore implements Datastore, ProcessorHandler, KairosMe
 							//todo if we allow deletes for specific types this needs to change
 							if (deleteQuery.getTags().isEmpty())
 							{
-								statement = new BoundStatement(cluster.psRowKeyTimeDelete);
-								statement.setString(0, rowKey.getMetricName());
-								statement.setTimestamp(1, new Date(rowKey.getTimestamp()));
-								statement.setConsistencyLevel(cluster.getReadConsistencyLevel());
+								statement = new BoundStatement(cluster.psRowKeyTimeDelete)
+										.setString(0, rowKey.getMetricName())
+										.setString(1, DATA_POINTS_TABLE_NAME)
+										.setTimestamp(2, new Date(rowKey.getTimestamp()))
+										.setConsistencyLevel(cluster.getReadConsistencyLevel());
 								cluster.execute(statement);
 							}
 							return null;

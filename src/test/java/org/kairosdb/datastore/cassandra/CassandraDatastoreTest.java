@@ -294,9 +294,9 @@ public class CassandraDatastoreTest extends DatastoreTestHelper
 		CassandraConfiguration configuration = new CassandraConfiguration(config);
 		CassandraClientImpl client = new CassandraClientImpl(configuration.getWriteCluster());
 		client.init();
-		m_clusterConnection = new ClusterConnection(client,
+		m_clusterConnection = new ClusterConnection(configuration, client,
 				EnumSet.of(ClusterConnection.Type.WRITE, ClusterConnection.Type.META),
-				ImmutableMultimap.of()).startup(false);
+				ImmutableMultimap.of(TAG_INDEXED_ROW_KEY_METRIC, "*")).startup(false);
 		BatchStats batchStats = new BatchStats();
 		DataCache<DataPointsRowKey> rowKeyCache = new DataCache<>(1024);
 		DataCache<String> metricNameCache = new DataCache<>(1024);
@@ -348,6 +348,12 @@ public class CassandraDatastoreTest extends DatastoreTestHelper
 					{
 						return new CQLFilteredRowKeyIterator(cluster, metricName,
 								startTime, endTime, filterTags, "");
+					}
+				},
+				new CassandraModule.CQLBatchFactory() {
+					@Override
+					public CQLBatch create() {
+						return null;
 					}
 				});
 

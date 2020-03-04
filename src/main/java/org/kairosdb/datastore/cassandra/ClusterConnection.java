@@ -16,6 +16,7 @@ import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +40,8 @@ public class ClusterConnection
 {
 	public static final Logger logger = LoggerFactory.getLogger(ClusterConnection.class);
 
+
+
 	public enum Type
 	{
 		WRITE,
@@ -50,13 +53,14 @@ public class ClusterConnection
 			"CREATE KEYSPACE IF NOT EXISTS %s" +
 			"  WITH REPLICATION = %s";
 
+	public static final String DATA_POINTS_TABLE_NAME = "data_points";
 	public static final String DATA_POINTS_TABLE = "" +
-			"CREATE TABLE IF NOT EXISTS data_points (\n" +
+			"CREATE TABLE IF NOT EXISTS "+DATA_POINTS_TABLE_NAME+" (\n" +
 			"  key blob,\n" +
 			"  column1 blob,\n" +
 			"  value blob,\n" +
 			"  PRIMARY KEY ((key), column1)\n" +
-			") WITH COMPACT STORAGE";
+			")";
 
 	//This is effectively what the above table is
 	/*public static final String DATA_POINTS_TABLE = "" +
@@ -70,16 +74,18 @@ public class ClusterConnection
 			"  PRIMARY KEY ((metric, row_time, data_type, tags), offset)" +
 			")";*/
 
+	public static final String ROW_KEY_INDEX_TABLE_NAME = "row_key_index";
 	public static final String ROW_KEY_INDEX_TABLE = "" +
-			"CREATE TABLE IF NOT EXISTS row_key_index (\n" +
+			"CREATE TABLE IF NOT EXISTS "+ROW_KEY_INDEX_TABLE_NAME+" (\n" +
 			"  key blob,\n" +
 			"  column1 blob,\n" +
 			"  value blob,\n" +
 			"  PRIMARY KEY ((key), column1)\n" +
 			")";
 
+	public static final String ROW_KEY_TIME_INDEX_NAME = "row_key_time_index";
 	public static final String ROW_KEY_TIME_INDEX = "" +
-			"CREATE TABLE IF NOT EXISTS row_key_time_index (\n" +
+			"CREATE TABLE IF NOT EXISTS "+ROW_KEY_TIME_INDEX_NAME+" (\n" +
 			"  metric text,\n" +
 			"  table_name text,\n" +
 			"  row_time timestamp,\n" +
@@ -87,8 +93,9 @@ public class ClusterConnection
 			"  PRIMARY KEY ((metric), table_name, row_time)\n" +
 			")";
 
+	public static final String ROW_KEYS_NAME = "row_keys";
 	public static final String ROW_KEYS = "" +
-			"CREATE TABLE IF NOT EXISTS row_keys (\n" +
+			"CREATE TABLE IF NOT EXISTS "+ROW_KEYS_NAME+" (\n" +
 			"  metric text,\n" +
 			"  table_name text, \n" +
 			"  row_time timestamp,\n" +
@@ -103,8 +110,9 @@ public class ClusterConnection
 	 * Alternate form of the row_keys table which includes a hash of each tag key:value pair in the
 	 * partion key. This is used to improve lookups for high tag cardinality.
 	 */
+	public static final String TAG_INDEXED_ROW_KEYS_NAME = "tag_indexed_row_keys";
 	public static final String TAG_INDEXED_ROW_KEYS = "" +
-			"CREATE TABLE IF NOT EXISTS tag_indexed_row_keys (\n" +
+			"CREATE TABLE IF NOT EXISTS "+TAG_INDEXED_ROW_KEYS_NAME+" (\n" +
 			"  metric text,\n" +
 			"  table_name text, \n" +
 			"  row_time timestamp,\n" +
@@ -117,16 +125,18 @@ public class ClusterConnection
 			"  PRIMARY KEY ((metric, table_name, row_time, single_tag_pair), data_type, tag_collection_hash, tags)\n" +
 			")";
 
+	public static final String STRING_INDEX_TABLE_NAME = "string_index";
 	public static final String STRING_INDEX_TABLE = "" +
-			"CREATE TABLE IF NOT EXISTS string_index (\n" +
+			"CREATE TABLE IF NOT EXISTS "+STRING_INDEX_TABLE_NAME+" (\n" +
 			"  key blob,\n" +
 			"  column1 text,\n" +
 			"  value blob,\n" +
 			"  PRIMARY KEY ((key), column1)\n" +
 			")";
 
+	public static final String SERVICE_INDEX_NAME = "service_index";
 	public static final String SERVICE_INDEX = "" +
-			"CREATE TABLE IF NOT EXISTS service_index (" +
+			"CREATE TABLE IF NOT EXISTS "+SERVICE_INDEX_NAME+" (" +
 			" service text," +
 			" service_key text," +
 			" key text," +
@@ -142,13 +152,13 @@ public class ClusterConnection
 			"(key, column1, value) VALUES (?, ?, ?) USING TTL ? AND TIMESTAMP ?";
 
 	public static final String ROW_KEY_TIME_INSERT = "INSERT INTO row_key_time_index " +
-			"(metric, table_name, row_time) VALUES (?, 'data_points', ?) USING TTL ?";
+			"(metric, table_name, row_time) VALUES (?, ?, ?) USING TTL ?";
 
 	public static final String ROW_KEY_INSERT = "INSERT INTO row_keys " +
-			"(metric, table_name, row_time, data_type, tags, mtime) VALUES (?, 'data_points', ?, ?, ?, now()) USING TTL ?"; // AND TIMESTAMP ?";
+			"(metric, table_name, row_time, data_type, tags, mtime) VALUES (?, ?, ?, ?, ?, now()) USING TTL ?"; // AND TIMESTAMP ?";
 
 	public static final String TAG_INDEXED_ROW_KEY_INSERT = "INSERT INTO tag_indexed_row_keys " +
-			"(metric, table_name, row_time, data_type, single_tag_pair, tag_collection_hash, tags, mtime) VALUES (?, 'data_points', ?, ?, ?, ?, ?, now()) USING TTL ?";
+			"(metric, table_name, row_time, data_type, single_tag_pair, tag_collection_hash, tags, mtime) VALUES (?, ?, ?, ?, ?, ?, ?, now()) USING TTL ?";
 
 	public static final String STRING_INDEX_INSERT = "INSERT INTO string_index " +
 			"(key, column1, value) VALUES (?, ?, 0x00)";
@@ -194,28 +204,28 @@ public class ClusterConnection
 
 	//New Row key queries
 	public static final String ROW_KEY_TIME_QUERY = "SELECT row_time " +
-			"FROM row_key_time_index WHERE metric = ? AND table_name = 'data_points' AND " +
+			"FROM row_key_time_index WHERE metric = ? AND table_name = ? AND " +
 			"row_time >= ? AND row_time <= ?";
 
-	public static final String ROW_KEY_QUERY = "SELECT row_time, data_type, tags " +
-			"FROM row_keys WHERE metric = ? AND table_name = 'data_points' AND row_time = ?";
+	public static final String ROW_KEY_QUERY = "SELECT row_time, data_type, tags, TTL (value) " +
+			"FROM row_keys WHERE metric = ? AND table_name = ? AND row_time = ?";
 
-	public static final String TAG_INDEXED_ROW_KEY_QUERY = "SELECT row_time, data_type, tags, tag_collection_hash " +
-			"FROM tag_indexed_row_keys WHERE metric = ? AND table_name = 'data_points' AND row_time = ? and single_tag_pair = ? " +
+	public static final String TAG_INDEXED_ROW_KEY_QUERY = "SELECT row_time, data_type, tags, TTL (value), tag_collection_hash " +
+			"FROM tag_indexed_row_keys WHERE metric = ? AND table_name = ? AND row_time = ? and single_tag_pair = ? " +
 			"ORDER BY data_type, tag_collection_hash";
 
 	public static final String ROW_KEY_TAG_QUERY_WITH_TYPE = "SELECT row_time, data_type, tags " +
 			"FROM row_keys WHERE metric = ? AND table_name = 'data_points' AND row_time = ? AND data_type IN %s"; //Use ValueSequence when setting this
 
 	public static final String ROW_KEY_TIME_DELETE = "DELETE FROM row_key_time_index " +
-			"WHERE metric = ? AND table_name = 'data_points' AND row_time = ?";
+			"WHERE metric = ? AND table_name = ? AND row_time = ?";
 
 	public static final String ROW_KEY_DELETE = "DELETE FROM row_keys WHERE metric = ? " +
-			"AND table_name = 'data_points' AND row_time = ? AND data_type = ? " +
+			"AND table_name = ? AND row_time = ? AND data_type = ? " +
 			"AND tags = ?";
 
 	public static final String TAG_INDEXED_ROW_KEY_DELETE = "DELETE FROM tag_indexed_row_keys WHERE metric = ? " +
-			"AND table_name = 'data_points' AND row_time = ? AND data_type = ? " +
+			"AND table_name = ? AND row_time = ? AND data_type = ? " +
 			"AND single_tag_pair = ? AND tag_collection_hash = ? AND tags = ?";
 
 	//Service index queries
@@ -294,14 +304,17 @@ public class ClusterConnection
 	private final RowKeysTableLookup m_indexedRowKeyLookup = new TagIndexedRowKeysTableLookup();
 	private final RowKeysTableLookup m_rowKeyLookup = new RowKeysTableLookup();
 
+	private final CassandraConfiguration m_cassandraConfiguration;
 
-	public ClusterConnection(CassandraClient cassandraClient, EnumSet<Type> clusterType,
+
+	public ClusterConnection(CassandraConfiguration cassandraConfig, CassandraClient cassandraClient, EnumSet<Type> clusterType,
 			Multimap<String, String> tagIndexMetricNames)
 	{
+		m_cassandraConfiguration = cassandraConfig;
 		m_cassandraClient = cassandraClient;
 		m_clusterType = clusterType;
 
-		m_alwaysUseTagIndexedLookup = tagIndexMetricNames.equals(ImmutableMultimap.of("*", "*"));
+		m_alwaysUseTagIndexedLookup = tagIndexMetricNames.containsKey("*");
 		m_tagIndexMetricNames = tagIndexMetricNames;
 
 		if (m_alwaysUseTagIndexedLookup)
@@ -509,13 +522,13 @@ public class ClusterConnection
 			{
 				try
 				{
-					session.execute(DATA_POINTS_TABLE);
-					session.execute(ROW_KEY_INDEX_TABLE);
-					session.execute(STRING_INDEX_TABLE);
+					session.execute(DATA_POINTS_TABLE+" "+m_cassandraConfiguration.getCreateWithConfig(DATA_POINTS_TABLE_NAME));
+					session.execute(ROW_KEY_INDEX_TABLE+" "+m_cassandraConfiguration.getCreateWithConfig(ROW_KEY_INDEX_TABLE_NAME));
+					session.execute(STRING_INDEX_TABLE+" "+m_cassandraConfiguration.getCreateWithConfig(STRING_INDEX_TABLE_NAME));
 
-					session.execute(ROW_KEYS);
-					session.execute(TAG_INDEXED_ROW_KEYS);
-					session.execute(ROW_KEY_TIME_INDEX);
+					session.execute(ROW_KEYS+" "+m_cassandraConfiguration.getCreateWithConfig(ROW_KEYS_NAME));
+					session.execute(TAG_INDEXED_ROW_KEYS+" "+m_cassandraConfiguration.getCreateWithConfig(TAG_INDEXED_ROW_KEYS_NAME));
+					session.execute(ROW_KEY_TIME_INDEX+" "+m_cassandraConfiguration.getCreateWithConfig(ROW_KEY_TIME_INDEX_NAME));
 				}
 				catch (Exception e)
 				{
@@ -528,7 +541,7 @@ public class ClusterConnection
 			{
 				try
 				{
-					session.execute(SERVICE_INDEX);
+					session.execute(SERVICE_INDEX+" "+m_cassandraConfiguration.getCreateWithConfig(SERVICE_INDEX_NAME));
 				}
 				catch (Exception e)
 				{
@@ -569,10 +582,11 @@ public class ClusterConnection
 			return
 					psRowKeyInsert.bind()
 							.setString(0, rowKey.getMetricName())
-							.setTimestamp(1, new Date(rowKey.getTimestamp()))
-							.setString(2, rowKey.getDataType())
-							.setMap(3, rowKey.getTags())
-							.setInt(4, rowKeyTtl)
+							.setString(1, DATA_POINTS_TABLE_NAME)
+							.setTimestamp(2, new Date(rowKey.getTimestamp()))
+							.setString(3, rowKey.getDataType())
+							.setMap(4, rowKey.getTags())
+							.setInt(5, rowKeyTtl)
 							.setIdempotent(true);
 		}
 
@@ -590,9 +604,10 @@ public class ClusterConnection
 			return
 					psRowKeyDelete.bind()
 							.setString(0, rowKey.getMetricName())
-							.setTimestamp(1, new Date(rowKey.getTimestamp()))
-							.setString(2, rowKey.getDataType())
-							.setMap(3, rowKey.getTags());
+							.setString(1, DATA_POINTS_TABLE_NAME)
+							.setTimestamp(2, new Date(rowKey.getTimestamp()))
+							.setString(3, rowKey.getDataType())
+							.setMap(4, rowKey.getTags());
 		}
 
 		/*
@@ -610,7 +625,8 @@ public class ClusterConnection
 		{
 			BoundStatement statement = psRowKeyQuery.bind()
 					.setString(0, metricName)
-					.setTimestamp(1, new Date(rowKeyTimestamp));
+					.setString(1, DATA_POINTS_TABLE_NAME)
+					.setTimestamp(2, new Date(rowKeyTimestamp));
 
 			statement.setConsistencyLevel(getReadConsistencyLevel());
 			ResultSetFuture resultSetFuture = executeAsync(statement);
@@ -658,23 +674,36 @@ public class ClusterConnection
 		{
 			TagSetHash tagSetHash = generateTagPairHashes(rowKey);
 			List<Statement> insertStatements = new ArrayList<>(tagSetHash.getTagPairHashes().size());
+
+			//Insert index statements
+			insertStatements.addAll(createIndexStatements(rowKey, rowKeyTtl));
+
+			//Always insert into row keys table
+			insertStatements.add(createInsertStatement(rowKey, rowKeyTtl));
+
+			return insertStatements;
+		}
+
+		@Override
+		public List<Statement> createIndexStatements(DataPointsRowKey rowKey, int rowKeyTtl)
+		{
+			TagSetHash tagSetHash = generateTagPairHashes(rowKey);
+			List<Statement> insertStatements = new ArrayList<>(tagSetHash.getTagPairHashes().size());
 			Date rowKeyTimestamp = new Date(rowKey.getTimestamp());
 			for (String tagPair : tagSetHash.getTagPairHashes())
 			{
 				insertStatements.add(
 						psTagIndexedRowKeyInsert.bind()
 								.setString(0, rowKey.getMetricName())
-								.setTimestamp(1, rowKeyTimestamp)
-								.setString(2, rowKey.getDataType())
-								.setString(3, tagPair)
-								.setInt(4, tagSetHash.getTagCollectionHash())
-								.setMap(5, rowKey.getTags())
-								.setInt(6, rowKeyTtl)
+								.setString(1, DATA_POINTS_TABLE_NAME)
+								.setTimestamp(2, rowKeyTimestamp)
+								.setString(3, rowKey.getDataType())
+								.setString(4, tagPair)
+								.setInt(5, tagSetHash.getTagCollectionHash())
+								.setMap(6, rowKey.getTags())
+								.setInt(7, rowKeyTtl)
 								.setIdempotent(true));
 			}
-
-			//Always insert into row keys table
-			insertStatements.add(createInsertStatement(rowKey, rowKeyTtl));
 
 			return insertStatements;
 		}
@@ -689,11 +718,12 @@ public class ClusterConnection
 				deleteStatements.add(
 						psTagIndexedRowKeyDelete.bind()
 								.setString(0, rowKey.getMetricName())
-								.setTimestamp(1, rowKeyTimestamp)
-								.setString(2, rowKey.getDataType())
-								.setString(3, tagPair)
-								.setInt(4, tagSetHash.getTagCollectionHash())
-								.setMap(5, rowKey.getTags()));
+								.setString(1, DATA_POINTS_TABLE_NAME)
+								.setTimestamp(2, rowKeyTimestamp)
+								.setString(3, rowKey.getDataType())
+								.setString(4, tagPair)
+								.setInt(5, tagSetHash.getTagCollectionHash())
+								.setMap(6, rowKey.getTags()));
 			}
 
 			//Need to delete from row keys table as well
@@ -769,7 +799,7 @@ public class ClusterConnection
 								return resultSetsGroupedByTagName.stream().map(RowCountEstimatingRowKeyResultSet::create).min(comparator)
 										.orElseThrow(() -> new IllegalStateException("No minimal ResultSet found"));
 							}
-						});
+						}, MoreExecutors.directExecutor());
 
 				return keyTimeQueryResultSetFuture;
 			}
@@ -798,8 +828,9 @@ public class ClusterConnection
 						tagName,
 						psTagIndexedRowKeyQuery.bind()
 								.setString(0, metricName)
-								.setTimestamp(1, timestamp)
-								.setString(2, tagPair));
+								.setString(1, DATA_POINTS_TABLE_NAME)
+								.setTimestamp(2, timestamp)
+								.setString(3, tagPair));
 			}
 			return queryStatementsByTagName;
 		}
