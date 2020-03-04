@@ -88,7 +88,7 @@ public class PercentileAggregatorTest
 		double[] doubleValues = new double[values.length];
 		for (int i = 0; i < values.length; i++)
 		{
-			doubleValues[i] = new Double(values[i].toString());
+			doubleValues[i] = Double.valueOf(values[i].toString());
 		}
 		return getActualPercentile(percentile, doubleValues);
 	}
@@ -97,6 +97,7 @@ public class PercentileAggregatorTest
 	{
 		Random random = new Random();
 		aggregator.setPercentile(percentile);
+		aggregator.init();
 		ListDataPointGroup group = new ListDataPointGroup("group");
 		double[] values = new double[testSize];
 		for (int i = 0; i < testSize; i++)
@@ -120,6 +121,7 @@ public class PercentileAggregatorTest
 	{
 		Random random = new Random();
 		aggregator.setPercentile(percentile);
+		aggregator.init();
 		ListDataPointGroup group = new ListDataPointGroup("group");
 		long[] values = new long[testSize];
 		long range = 1000000000L;
@@ -144,6 +146,7 @@ public class PercentileAggregatorTest
 	{
 		Random random = new Random();
 		aggregator.setPercentile(percentile);
+		aggregator.init();
 		ListDataPointGroup group = new ListDataPointGroup("group");
 		Object[] values = new Object[testSize];
 		long range = 1000000000L;
