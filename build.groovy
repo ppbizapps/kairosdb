@@ -269,9 +269,9 @@ tarRule = new TarRule("build/${programName}-${version}-${release}.tar")
 		.addDepend(resolveIvyFileSetRule)
 		.addFileSetTo(zipBinDir, scriptsFileSet)
 		.addFileSetTo(zipWebRootDir, webrootFileSet)
-		.addFileSetTo(zipAuthDir, authFileSet)
 		.addFileTo(zipConfDir, "src/main/resources", "kairosdb.conf")
 		.addFileTo(zipConfLoggingDir, "src/main/resources", "logback.xml")
+		.addFileSetTo(zipAuthDir, authFileSet)
 		.setFilePermission(".*\\.sh", 0755)
 
 for (AbstractFileSet fs in libFileSets)
@@ -342,12 +342,12 @@ def doRPM(Rule rule)
 			new File("src/main/resources/logback.xml"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE))
 	rpmBuilder.addFile("$rpmBaseInstallDir/bin/kairosdb-env.sh",
 			new File("src/scripts/kairosdb-env.sh"), 0755, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE))
-	rpmBuilder.addFile("$rpmBaseInstallDir/auth/auth.props",
-			new File("auth/auth.props"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE))
-	rpmBuilder.addFile("$rpmBaseInstallDir/auth/basicAuth.conf",
-			new File("auth/basicAuth.conf"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE))
-	rpmBuilder.addFile("$rpmBaseInstallDir/auth/ldap-loginModule.conf",
-			new File("auth/ldap-loginModule.conf"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE))
+	rpmBuilder.addFile("$rpmBaseInstallDir/conf/auth/auth.props",
+			new File("src/main/conf/auth/auth.props"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE))
+	rpmBuilder.addFile("$rpmBaseInstallDir/conf/auth/basicAuth.conf",
+			new File("src/main/conf/auth/basicAuth.conf"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE))
+	rpmBuilder.addFile("$rpmBaseInstallDir/conf/auth/ldap-loginModule.conf",
+			new File("src/main/conf/auth/ldap-loginModule.conf"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE))
 
 	for (AbstractFileSet.File f : webrootFileSet.getFiles())
 		rpmBuilder.addFile("$rpmBaseInstallDir/webroot/$f.file", new File(f.getBaseDir(), f.getFile()))
