@@ -1,5 +1,6 @@
 package org.kairosdb.rollup;
 
+import org.joda.time.DateTimeZone;
 import org.kairosdb.core.DataPoint;
 import org.kairosdb.core.aggregator.RangeAggregator;
 import org.kairosdb.core.aggregator.Sampling;
@@ -12,7 +13,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Date;
 import java.util.List;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 public class RollupProcessorImpl implements RollupProcessor
 {
@@ -23,7 +24,7 @@ public class RollupProcessorImpl implements RollupProcessor
 
 	public RollupProcessorImpl(KairosDatastore datastore)
 	{
-		this.datastore = checkNotNull(datastore, "datastore must not be null");
+		this.datastore = requireNonNull(datastore, "datastore must not be null");
 	}
 
 	/*
@@ -38,7 +39,7 @@ public class RollupProcessorImpl implements RollupProcessor
 		5 - Create a rollup for each sampling interval until you reach now.
 	 */
 	@Override
-	public long process(RollupTaskStatusStore statusStore, RollupTask task, QueryMetric rollupQueryMetric)
+	public long process(RollupTaskStatusStore statusStore, RollupTask task, QueryMetric rollupQueryMetric, DateTimeZone timeZone)
 			throws RollUpException, DatastoreException, InterruptedException
 	{
 		long now = now();
@@ -50,22 +51,16 @@ public class RollupProcessorImpl implements RollupProcessor
 		if (log.isDebugEnabled())
 			log.debug("startTime = " + new Date(startTime));
 
-		return process(task, rollupQueryMetric, startTime, now);
+		return process(task, rollupQueryMetric, startTime, now, timeZone);
 	}
 
 	@Override
-	public long process(RollupTask task, QueryMetric rollupQueryMetric, long startTime, long endTime)
+	public long process(RollupTask task, QueryMetric rollupQueryMetric, long startTime, long endTime, DateTimeZone timeZone)
 			throws DatastoreException, InterruptedException, RollUpException {
 		RangeAggregator lastAggregator = getLastAggregator(rollupQueryMetric.getAggregators());
-		Sampling samplingSize = getSamplingSize(lastAggregator);
 		List<SamplingPeriod> samplingPeriods;
 
-		if (lastAggregator.is_alignSampling()){
-			samplingPeriods = RollupUtil.getSamplingPeriodsAlignedToUnit(samplingSize, startTime, endTime);
-		}
-		else {
-			samplingPeriods = RollupUtil.getSamplingPeriods(samplingSize, startTime, endTime);
-		}
+		samplingPeriods = RollupUtil.getSamplingPeriodsAlignedToUnit(lastAggregator, startTime, endTime, timeZone);
 
 		if (log.isDebugEnabled())
 		{

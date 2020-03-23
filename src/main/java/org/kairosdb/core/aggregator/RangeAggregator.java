@@ -33,7 +33,7 @@ import java.util.Calendar;
 import java.util.Iterator;
 import java.util.TimeZone;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 public abstract class RangeAggregator implements Aggregator, TimezoneAware
 {
@@ -136,14 +136,14 @@ public abstract class RangeAggregator implements Aggregator, TimezoneAware
 				m_unitField = chronology.millisOfSecond();
 				break;
 		}
+
+		if (m_alignSampling)
+			m_startTime = alignRangeBoundary(m_startTime);
 	}
 
 	public DataPointGroup aggregate(DataPointGroup dataPointGroup)
 	{
-		checkNotNull(dataPointGroup);
-
-		if (m_alignSampling)
-			m_startTime = alignRangeBoundary(m_startTime);
+		requireNonNull(dataPointGroup);
 
 		if (m_exhaustive)
 			return (new ExhaustiveRangeDataPointAggregator(dataPointGroup, getSubAggregator()));
