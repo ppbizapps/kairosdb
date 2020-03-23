@@ -3,12 +3,9 @@ package org.kairosdb.datastore.cassandra;
 import com.datastax.driver.core.*;
 import com.datastax.driver.core.exceptions.InvalidQueryException;
 import com.datastax.driver.core.policies.LoadBalancingPolicy;
-import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.SetMultimap;
@@ -21,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -74,6 +72,7 @@ public class ClusterConnection
 			"  PRIMARY KEY ((metric, row_time, data_type, tags), offset)" +
 			")";*/
 
+	//old row key index
 	public static final String ROW_KEY_INDEX_TABLE_NAME = "row_key_index";
 	public static final String ROW_KEY_INDEX_TABLE = "" +
 			"CREATE TABLE IF NOT EXISTS "+ROW_KEY_INDEX_TABLE_NAME+" (\n" +
@@ -849,8 +848,8 @@ public class ClusterConnection
 				if (m_alwaysUseTagIndexedLookup || allTags || indexedTags.contains(tagPairEntry.getKey()))
 				{
 					tagPairHashes.add(hashForTagPair(tagPairEntry.getKey(), tagPairEntry.getValue()));
-					tagCollectionHasher.putString(tagPairEntry.getKey(), Charsets.UTF_8);
-					tagCollectionHasher.putString(tagPairEntry.getValue(), Charsets.UTF_8);
+					tagCollectionHasher.putString(tagPairEntry.getKey(), StandardCharsets.UTF_8);
+					tagCollectionHasher.putString(tagPairEntry.getValue(), StandardCharsets.UTF_8);
 				}
 			}
 			return new TagSetHash(tagCollectionHasher.hash().asInt(), tagPairHashes);
