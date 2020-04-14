@@ -59,6 +59,7 @@ public class WebServer implements KairosDBService
 	public static final String JETTY_ADDRESS_PROPERTY = "kairosdb.jetty.address";
 	public static final String JETTY_PORT_PROPERTY = "kairosdb.jetty.port";
 	public static final String JETTY_WEB_ROOT_PROPERTY = "kairosdb.jetty.static_web_root";
+	public static final String JETTY_SOCKET_IDLE_TIMEOUT = "kairosdb.jetty.socket_idle_timeout";
 	public static final String JETTY_SSL_PORT = "kairosdb.jetty.ssl.port";
 	public static final String JETTY_SSL_PROTOCOLS = "kairosdb.jetty.ssl.protocols";
 	public static final String JETTY_SSL_CIPHER_SUITES = "kairosdb.jetty.ssl.cipherSuites";
@@ -80,6 +81,7 @@ public class WebServer implements KairosDBService
 	private int m_port;
 	private String m_webRoot;
 	private Server m_server;
+	private final int m_idleTimeout;
 	private int m_sslPort;
 	private String[] m_cipherSuites;
 	private String[] m_protocols;
@@ -98,13 +100,14 @@ public class WebServer implements KairosDBService
 	public WebServer(int port, String webRoot)
 			throws UnknownHostException
 	{
-		this(null, port, webRoot);
+		this(null, port, webRoot, 120000);
 	}
 
 	@Inject
 	public WebServer(@Named(JETTY_ADDRESS_PROPERTY) String address,
 			@Named(JETTY_PORT_PROPERTY) int port,
-			@Named(JETTY_WEB_ROOT_PROPERTY) String webRoot)
+			@Named(JETTY_WEB_ROOT_PROPERTY) String webRoot,
+			@Named(JETTY_SOCKET_IDLE_TIMEOUT) int idleTimeout)
 			throws UnknownHostException
 	{
 		requireNonNull(webRoot);
@@ -112,6 +115,7 @@ public class WebServer implements KairosDBService
 		m_port = port;
 		m_webRoot = webRoot;
 		m_address = InetAddress.getByName(address);
+		m_idleTimeout = idleTimeout;
 	}
 
 	@Inject(optional = true)
@@ -213,6 +217,7 @@ public class WebServer implements KairosDBService
 				ServerConnector http = new ServerConnector(m_server);
 				http.setHost(m_address.getHostName());
 				http.setPort(m_port);
+				http.setIdleTimeout(m_idleTimeout);
 				m_server.addConnector(http);
 			}
 
@@ -306,6 +311,7 @@ public class WebServer implements KairosDBService
 
 		ServerConnector https = new ServerConnector(m_server, new SslConnectionFactory(sslContextFactory, "http/1.1"), new HttpConnectionFactory(httpConfig));
 		https.setPort(m_sslPort);
+		https.setIdleTimeout(m_idleTimeout);
 		m_server.addConnector(https);
 	}
 
