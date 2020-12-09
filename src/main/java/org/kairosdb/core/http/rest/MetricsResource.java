@@ -81,6 +81,7 @@ enum ServerType
 public class MetricsResource implements KairosMetricReporter
 {
 	public static final Logger logger = LoggerFactory.getLogger(MetricsResource.class);
+	public static final Logger querySourceIPLogger = LoggerFactory.getLogger("query_source_ip_logger");
 	public static final String QUERY_TIME = "kairosdb.http.query_time";
 	public static final String REQUEST_TIME = "kairosdb.http.request_time";
 	public static final String INGEST_COUNT = "kairosdb.http.ingest_count";
@@ -164,6 +165,9 @@ public class MetricsResource implements KairosMetricReporter
 		logger.info("KairosDB server type set to: " + m_serverType.toString());
 	}
 
+	@Inject(optional = true)
+	@Named("kairosdb.queries.log_source_ip")
+	private boolean m_logQuerySourceIP = false;
 
 	@Inject
 	private SimpleStatsReporter m_simpleStatsReporter = new SimpleStatsReporter();
@@ -514,6 +518,7 @@ public class MetricsResource implements KairosMetricReporter
 			mainQuery.getEndAbsolute();
 
 			List<QueryMetric> queries = mainQuery.getQueryMetrics();
+			StringBuilder sourceIPLog = new StringBuilder("Query source IP: " + remoteAddr + "\tQuery metrics: ");
 
 			int queryCount = 0;
 			for (QueryMetric query : queries)
@@ -521,6 +526,8 @@ public class MetricsResource implements KairosMetricReporter
 				queryCount++;
 				ThreadReporter.addTag("metric_name", query.getName());
 				ThreadReporter.addTag("query_index", String.valueOf(queryCount));
+
+				sourceIPLog.append(query.getName() + ", ");
 
 				DatastoreQuery dq = datastore.createQuery(query);
 				long startQuery = System.currentTimeMillis();
@@ -542,6 +549,10 @@ public class MetricsResource implements KairosMetricReporter
 			writer.flush();
 			writer.close();
 
+			if (m_logQuerySourceIP)
+			{
+				querySourceIPLogger.info(sourceIPLog.substring(0, sourceIPLog.length() - 2));
+			}
 
 			//System.out.println("About to process plugins");
 			List<QueryPlugin> plugins = mainQuery.getPlugins();
